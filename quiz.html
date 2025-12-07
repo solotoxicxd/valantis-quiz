@@ -113,14 +113,6 @@
             80% { clip: rect(10px, 9999px, 5px, 0); }
             100% { clip: rect(58px, 9999px, 84px, 0); }
         }
-
-        /* Review Section Styling */
-        .review-item {
-            border-left: 2px solid #ef4444;
-            padding-left: 1rem;
-            margin-bottom: 1.5rem;
-            text-align: left;
-        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col items-center justify-center selection:bg-white selection:text-black">
@@ -133,8 +125,6 @@
         <!-- Header -->
         <header class="absolute top-0 left-0 w-full p-6 flex justify-between items-center opacity-70">
             <div class="flex items-center gap-2">
-                <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <div class="text-xs font-bold tracking-[0.2em] uppercase">Valantis Research</div>
             </div>
             <div class="text-[10px] tracking-widest font-mono text-zinc-500" id="progress-indicator">SYSTEM READY</div>
         </header>
@@ -235,12 +225,6 @@
                     <span class="text-zinc-500 text-sm font-mono uppercase tracking-widest">Efficiency Rating</span>
                     <div class="text-7xl font-bold my-2 bg-clip-text text-transparent bg-gradient-to-b from-white to-zinc-600" id="final-score">0%</div>
                 </div>
-            </div>
-
-            <!-- Conditional Review Section -->
-            <div id="review-section" class="hidden text-left space-y-4 py-4">
-                <h3 class="text-xs font-mono uppercase text-red-500 tracking-widest border-b border-red-900/30 pb-2">Mission Debrief (Incorrect Entries)</h3>
-                <div id="review-list"></div>
             </div>
 
             <p id="result-message" class="text-zinc-400 max-w-md mx-auto italic border-l-2 border-zinc-800 pl-4"></p>
@@ -430,8 +414,7 @@
             username: "",
             currentQuestionIndex: 0,
             score: 0,
-            isAnswering: false,
-            history: [] // Stores { question, selected, correct, isCorrect }
+            isAnswering: false
         };
 
         // --- DOM Elements ---
@@ -448,9 +431,7 @@
             scoreDisplay: document.getElementById('score-display'),
             finalScore: document.getElementById('final-score'),
             resultMessage: document.getElementById('result-message'),
-            errorMsg: document.getElementById('error-msg'),
-            reviewSection: document.getElementById('review-section'),
-            reviewList: document.getElementById('review-list')
+            errorMsg: document.getElementById('error-msg')
         };
 
         // --- Init ---
@@ -497,7 +478,6 @@
             currentState.username = name;
             currentState.currentQuestionIndex = 0;
             currentState.score = 0;
-            currentState.history = [];
             
             updateQuestionUI();
             fadeSwap(els.usernameEntry, els.quizInterface);
@@ -552,14 +532,6 @@
             const currentQ = questions[currentState.currentQuestionIndex];
             const isCorrect = selectedIndex === currentQ.answer;
 
-            // Log History for Review
-            currentState.history.push({
-                question: currentQ.question,
-                selected: currentQ.options[selectedIndex],
-                correct: currentQ.options[currentQ.answer],
-                isCorrect: isCorrect
-            });
-
             const buttons = els.optionsContainer.querySelectorAll('button');
             buttons.forEach(b => {
                 b.classList.add('disabled', 'opacity-50', 'cursor-not-allowed');
@@ -597,21 +569,6 @@
             
             els.finalScore.innerText = `${percentage}%`;
             
-            // Generate Review List if errors exist
-            const wrongAnswers = currentState.history.filter(h => !h.isCorrect);
-            if (wrongAnswers.length > 0) {
-                els.reviewSection.classList.remove('hidden');
-                els.reviewList.innerHTML = wrongAnswers.map(item => `
-                    <div class="review-item bg-red-900/10 p-4 rounded text-sm">
-                        <div class="text-zinc-400 mb-1">${item.question}</div>
-                        <div class="text-red-400 line-through text-xs mb-1">${item.selected}</div>
-                        <div class="text-green-400 font-bold">${item.correct}</div>
-                    </div>
-                `).join('');
-            } else {
-                els.reviewSection.classList.add('hidden');
-            }
-            
             if (percentage === 100) {
                 els.resultMessage.innerText = "Perfect score. You are ready to build on the Modular Stack.";
             } else if (percentage >= 80) {
@@ -630,7 +587,6 @@
             playSound('click');
             els.usernameInput.value = '';
             currentState.username = '';
-            els.reviewSection.classList.add('hidden');
             fadeSwap(els.resultScreen, els.onboarding);
         }
 
