@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Valantis Protocol | Interactive Research</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: #050505;
+            color: #ffffff;
+            overflow-x: hidden;
+            margin: 0;
+        }
+
+        /* Canvas Background */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        /* Smooth fade transitions */
+        .fade-enter { opacity: 0; transform: translateY(20px); }
+        .fade-enter-active { opacity: 1; transform: translateY(0); transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+        .fade-exit { opacity: 1; transform: translateY(0); }
+        .fade-exit-active { opacity: 0; transform: translateY(-20px); transition: opacity 0.3s ease, transform 0.3s ease; }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+        /* Option Cards */
+        .option-card {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+        .option-card:hover:not(.disabled) {
+            background-color: #1a1a1a;
+            border-color: #666;
+            transform: translateX(6px);
+        }
+        .option-card.correct {
+            background-color: rgba(34, 197, 94, 0.15);
+            border-color: #22c55e;
+            color: #22c55e;
+            box-shadow: 0 0 15px rgba(34, 197, 94, 0.1);
+        }
+        .option-card.wrong {
+            background-color: rgba(239, 68, 68, 0.15);
+            border-color: #ef4444;
+            color: #ef4444;
+        }
+        .key-hint {
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 10px;
+            color: #666;
+            transition: all 0.2s;
+        }
+        .option-card:hover .key-hint {
+            border-color: #666;
+            color: #aaa;
+        }
+
+        /* Glitch Effect for Title */
+        .glitch-wrapper { position: relative; display: inline-block; }
+        .glitch { position: relative; color: white; }
+        .glitch::before, .glitch::after {
+            content: attr(data-text);
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #050505;
+        }
+        .glitch::before {
+            left: 2px;
+            text-shadow: -1px 0 #ff00c1;
+            clip: rect(44px, 450px, 56px, 0);
+            animation: glitch-anim 5s infinite linear alternate-reverse;
+        }
+        .glitch::after {
+            left: -2px;
+            text-shadow: -1px 0 #00fff9;
+            clip: rect(44px, 450px, 56px, 0);
+            animation: glitch-anim2 5s infinite linear alternate-reverse;
+        }
+        @keyframes glitch-anim {
+            0% { clip: rect(33px, 9999px, 11px, 0); }
+            20% { clip: rect(86px, 9999px, 93px, 0); }
+            40% { clip: rect(20px, 9999px, 55px, 0); }
+            60% { clip: rect(6px, 9999px, 83px, 0); }
+            80% { clip: rect(44px, 9999px, 19px, 0); }
+            100% { clip: rect(68px, 9999px, 7px, 0); }
+        }
+        @keyframes glitch-anim2 {
+            0% { clip: rect(12px, 9999px, 59px, 0); }
+            20% { clip: rect(64px, 9999px, 5px, 0); }
+            40% { clip: rect(34px, 9999px, 25px, 0); }
+            60% { clip: rect(84px, 9999px, 98px, 0); }
+            80% { clip: rect(10px, 9999px, 5px, 0); }
+            100% { clip: rect(58px, 9999px, 84px, 0); }
+        }
+
+        /* Review Section Styling */
+        .review-item {
+            border-left: 2px solid #ef4444;
+            padding-left: 1rem;
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center selection:bg-white selection:text-black">
+
+    <canvas id="bg-canvas"></canvas>
+
+    <!-- Main Container -->
+    <main id="app-container" class="relative z-10 w-full max-w-2xl p-6 min-h-[600px] flex flex-col justify-center backdrop-blur-sm bg-black/20 rounded-xl border border-white/5 shadow-2xl">
+        
+        <!-- Header -->
+        <header class="absolute top-0 left-0 w-full p-6 flex justify-between items-center opacity-70">
+            <div class="flex items-center gap-2">
+                <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <div class="text-xs font-bold tracking-[0.2em] uppercase">Valantis Research</div>
+            </div>
+            <div class="text-[10px] tracking-widest font-mono text-zinc-500" id="progress-indicator">SYSTEM READY</div>
+        </header>
+
+        <!-- 1. Onboarding Section -->
+        <section id="onboarding" class="space-y-8">
+            <div class="space-y-2">
+                <span class="text-xs font-mono text-zinc-500 border border-zinc-800 px-2 py-1 rounded bg-black/50">01 / BRIEFING</span>
+                <div class="glitch-wrapper block mt-4">
+                    <h1 class="text-5xl md:text-6xl font-bold tracking-tighter leading-none glitch" data-text="The Modular DEX Protocol.">
+                        The Modular <br>
+                        <span class="text-zinc-500">DEX Protocol.</span>
+                    </h1>
+                </div>
+            </div>
+
+            <div class="grid gap-6 text-zinc-400 leading-relaxed max-w-lg">
+                <div class="group cursor-default">
+                    <strong class="text-white block mb-1 group-hover:text-green-400 transition-colors">Target Subject (Who)</strong>
+                    <p>Valantis Labs. Nethermind Alumni. Backed by Cyber Fund & Robot Ventures.</p>
+                </div>
+                <div class="group cursor-default">
+                    <strong class="text-white block mb-1 group-hover:text-red-400 transition-colors">The Problem</strong>
+                    <p>Rigid DEX architectures fragment liquidity and expose providers to toxic flow (LVR).</p>
+                </div>
+                <div class="group cursor-default">
+                    <strong class="text-white block mb-1 group-hover:text-blue-400 transition-colors">The Solution</strong>
+                    <p>A "Sovereign Pool" framework separating assets from logic. Developers plug in custom <span class="text-white font-mono text-xs border border-zinc-700 px-1 rounded">Modules</span> for pricing & fees.</p>
+                </div>
+            </div>
+
+            <div class="pt-4">
+                <button onclick="nextStage('username'); playSound('hover')" class="group flex items-center gap-3 text-lg font-medium hover:text-white transition-colors text-zinc-300">
+                    <span class="border-b border-zinc-600 group-hover:border-white pb-1 transition-colors">Start Briefing</span>
+                    <i data-lucide="arrow-right" class="w-5 h-5 transition-transform group-hover:translate-x-1"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- 2. Username Section -->
+        <section id="username-entry" class="hidden space-y-8 w-full">
+             <div class="space-y-2">
+                <span class="text-xs font-mono text-zinc-500 border border-zinc-800 px-2 py-1 rounded bg-black/50">02 / AUTHENTICATION</span>
+                <h2 class="text-4xl font-bold tracking-tight mt-4">Identify Yourself.</h2>
+                <p class="text-zinc-500">Enter callsign to begin simulation.</p>
+            </div>
+
+            <div class="space-y-4">
+                <div class="relative group">
+                    <input type="text" id="username-input" placeholder="e.g. Satoshi" autocomplete="off"
+                        class="w-full bg-transparent border-b border-zinc-800 py-4 text-2xl outline-none placeholder:text-zinc-800 focus:border-white transition-colors text-white font-mono">
+                    <div class="absolute bottom-0 left-0 w-0 h-[1px] bg-white transition-all group-hover:w-full"></div>
+                </div>
+                <p id="error-msg" class="text-red-500 text-xs font-mono opacity-0 transition-opacity">>> ERROR: IDENTITY REQUIRED</p>
+            </div>
+
+            <div class="pt-8">
+                <button onclick="startQuiz()" class="w-full bg-white text-black font-bold py-4 hover:bg-zinc-200 transition-colors tracking-widest uppercase text-sm">
+                    Initialize Sequence
+                </button>
+            </div>
+        </section>
+
+        <!-- 3. Quiz Section -->
+        <section id="quiz-interface" class="hidden w-full space-y-8">
+            <div class="flex justify-between items-end border-b border-zinc-800 pb-4">
+                <div class="flex flex-col">
+                    <span class="text-[10px] text-zinc-500 font-mono tracking-widest mb-1">SEQUENCE</span>
+                    <span class="text-xl font-mono"><span id="q-current" class="text-white">1</span><span class="text-zinc-600">/</span><span id="q-total" class="text-zinc-600">10</span></span>
+                </div>
+                <div class="flex flex-col items-end">
+                    <span class="text-[10px] text-zinc-500 font-mono tracking-widest mb-1">CURRENT SCORE</span>
+                    <span id="score-display" class="text-xl font-mono text-white">0</span>
+                </div>
+            </div>
+
+            <h3 id="question-text" class="text-2xl md:text-3xl font-medium leading-tight min-h-[80px]">
+                Loading...
+            </h3>
+
+            <div id="options-container" class="grid gap-3">
+                <!-- Options injected via JS -->
+            </div>
+            
+            <div class="text-center text-[10px] text-zinc-700 font-mono uppercase">
+                Keyboard: [1] [2] [3] [4] to select
+            </div>
+        </section>
+
+        <!-- 4. Result Section -->
+        <section id="result-screen" class="hidden text-center space-y-6 w-full max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+            <div class="space-y-4 sticky top-0 bg-[#050505]/95 backdrop-blur z-10 py-4 border-b border-zinc-900">
+                <div class="inline-flex items-center justify-center p-3 border rounded-full border-zinc-800 mb-2">
+                    <i data-lucide="activity" class="w-6 h-6"></i>
+                </div>
+                <h2 class="text-4xl font-bold tracking-tighter">Analysis Complete.</h2>
+                <div class="flex flex-col items-center">
+                    <span class="text-zinc-500 text-sm font-mono uppercase tracking-widest">Efficiency Rating</span>
+                    <div class="text-7xl font-bold my-2 bg-clip-text text-transparent bg-gradient-to-b from-white to-zinc-600" id="final-score">0%</div>
+                </div>
+            </div>
+
+            <!-- Conditional Review Section -->
+            <div id="review-section" class="hidden text-left space-y-4 py-4">
+                <h3 class="text-xs font-mono uppercase text-red-500 tracking-widest border-b border-red-900/30 pb-2">Mission Debrief (Incorrect Entries)</h3>
+                <div id="review-list"></div>
+            </div>
+
+            <p id="result-message" class="text-zinc-400 max-w-md mx-auto italic border-l-2 border-zinc-800 pl-4"></p>
+
+            <div class="flex gap-3 pt-4">
+                <button onclick="shareResult()" class="flex-1 bg-white text-black font-bold py-3 hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2 text-sm uppercase tracking-wide">
+                    <i data-lucide="share-2" class="w-4 h-4"></i> Share
+                </button>
+                <button onclick="resetApp()" class="flex-1 bg-transparent border border-zinc-800 text-zinc-400 font-bold py-3 hover:text-white hover:border-white transition-colors text-sm uppercase tracking-wide">
+                    Restart
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="fixed bottom-6 text-center text-[10px] text-zinc-800 font-mono uppercase tracking-widest pointer-events-none z-0">
+        Valantis Research Terminal v2.1
+    </footer>
+
+    <script>
+        // --- Audio System ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            if (type === 'hover') {
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(400, audioCtx.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.05);
+                gainNode.gain.setValueAtTime(0.02, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.05);
+            } else if (type === 'click') {
+                oscillator.type = 'triangle';
+                oscillator.frequency.setValueAtTime(600, audioCtx.currentTime);
+                gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.1);
+            } else if (type === 'success') {
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(400, audioCtx.currentTime);
+                oscillator.frequency.linearRampToValueAtTime(800, audioCtx.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.3);
+            } else if (type === 'error') {
+                oscillator.type = 'sawtooth';
+                oscillator.frequency.setValueAtTime(150, audioCtx.currentTime);
+                oscillator.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 0.2);
+                gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.2);
+            }
+        }
+
+        // --- Visuals: Dynamic Background ---
+        const canvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let particles = [];
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+                this.size = Math.random() * 2;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                if (this.x < 0 || this.x > width) this.vx *= -1;
+                if (this.y < 0 || this.y > height) this.vy *= -1;
+            }
+            draw() {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < 40; i++) particles.push(new Particle());
+
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+            
+            // Draw Connections
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].update();
+                particles[i].draw();
+                for (let j = i; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < 150) {
+                        ctx.beginPath();
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+
+        // --- Data ---
+        const questions = [
+            {
+                question: "What is the core architectural innovation of Valantis?",
+                options: ["Sovereign Pools", "Optimistic Rollups", "zk-SNARKs", "Parachains"],
+                answer: 0
+            },
+            {
+                question: "Which major problem in traditional DEXs does Valantis solve?",
+                options: ["High Gas Fees", "Liquidity Fragmentation", "Slow Block Times", "Wallet Compatibility"],
+                answer: 1
+            },
+            {
+                question: "What concept describes Valantis' customizable components?",
+                options: ["DeFi Bricks", "Smart Containers", "Modules", "Logic Gates"],
+                answer: 2
+            },
+            {
+                question: "What is 'HOT' in the context of Valantis' first major implementation?",
+                options: ["High Octane Trading", "Hybrid Order Type", "Hyper On-chain Token", "Hash Oracle Trust"],
+                answer: 1
+            },
+            {
+                question: "How does the HOT AMM primarily benefit Liquidity Providers (LPs)?",
+                options: ["Zero Gas Fees", "MEV Protection (Toxic Flow Prevention)", "Automatic Leverage", "Guaranteed 100% APY"],
+                answer: 1
+            },
+            {
+                question: "The Valantis Labs team is composed of alumni from which engineering firm?",
+                options: ["ConsenSys", "OpenZeppelin", "Nethermind", "Paradigm"],
+                answer: 2
+            },
+            {
+                question: "Which complex token type is Valantis architecture designed to support natively?",
+                options: ["Rebase Tokens", "NFTs only", "Privacy Tokens", "Bitcoin Wrapped"],
+                answer: 0
+            },
+            {
+                question: "Which partner collaborated with Valantis to build the HOT AMM?",
+                options: ["Uniswap Labs", "Arrakis Finance", "Curve Finance", "Aave"],
+                answer: 1
+            },
+            {
+                question: "In Valantis, what is a 'Sovereign Pool'?",
+                options: ["A pool controlled by a government", "A pool with hardcoded, unchangeable logic", "A flexible shell connecting different logic modules", "A pool that only accepts stablecoins"],
+                answer: 2
+            },
+            {
+                question: "What role do 'Solvers' play in the HOT AMM?",
+                options: ["They mine new blocks", "They provide off-chain quotes for RFQ trades", "They govern the DAO", "They pay the gas fees for users"],
+                answer: 1
+            }
+        ];
+
+        // --- State ---
+        let currentState = {
+            username: "",
+            currentQuestionIndex: 0,
+            score: 0,
+            isAnswering: false,
+            history: [] // Stores { question, selected, correct, isCorrect }
+        };
+
+        // --- DOM Elements ---
+        const els = {
+            onboarding: document.getElementById('onboarding'),
+            usernameEntry: document.getElementById('username-entry'),
+            quizInterface: document.getElementById('quiz-interface'),
+            resultScreen: document.getElementById('result-screen'),
+            usernameInput: document.getElementById('username-input'),
+            questionText: document.getElementById('question-text'),
+            optionsContainer: document.getElementById('options-container'),
+            qCurrent: document.getElementById('q-current'),
+            qTotal: document.getElementById('q-total'),
+            scoreDisplay: document.getElementById('score-display'),
+            finalScore: document.getElementById('final-score'),
+            resultMessage: document.getElementById('result-message'),
+            errorMsg: document.getElementById('error-msg'),
+            reviewSection: document.getElementById('review-section'),
+            reviewList: document.getElementById('review-list')
+        };
+
+        // --- Init ---
+        lucide.createIcons();
+
+        // --- Navigation Logic ---
+        function fadeSwap(hideEl, showEl) {
+            hideEl.classList.add('fade-exit');
+            hideEl.classList.add('fade-exit-active');
+            
+            setTimeout(() => {
+                hideEl.classList.add('hidden');
+                hideEl.classList.remove('fade-exit', 'fade-exit-active');
+                
+                showEl.classList.remove('hidden');
+                showEl.classList.add('fade-enter');
+                
+                // Trigger reflow
+                void showEl.offsetWidth;
+                
+                showEl.classList.add('fade-enter-active');
+                setTimeout(() => {
+                    showEl.classList.remove('fade-enter', 'fade-enter-active');
+                }, 500);
+            }, 300);
+        }
+
+        function nextStage(stage) {
+            if (stage === 'username') {
+                fadeSwap(els.onboarding, els.usernameEntry);
+                setTimeout(() => els.usernameInput.focus(), 400);
+            }
+        }
+
+        function startQuiz() {
+            const name = els.usernameInput.value.trim();
+            if (!name) {
+                playSound('error');
+                els.errorMsg.style.opacity = '1';
+                return;
+            }
+            
+            playSound('click');
+            currentState.username = name;
+            currentState.currentQuestionIndex = 0;
+            currentState.score = 0;
+            currentState.history = [];
+            
+            updateQuestionUI();
+            fadeSwap(els.usernameEntry, els.quizInterface);
+            
+            // Attach Keyboard Listener
+            document.addEventListener('keydown', handleKeyInput);
+        }
+
+        function handleKeyInput(e) {
+            if (!currentState.isAnswering && els.quizInterface.classList.contains('hidden') === false) {
+                const key = parseInt(e.key);
+                if (key >= 1 && key <= 4) {
+                    // Find the button and trigger click logic
+                    const buttons = els.optionsContainer.querySelectorAll('button');
+                    if (buttons[key - 1]) {
+                         handleAnswer(key - 1, buttons[key - 1]);
+                    }
+                }
+            }
+        }
+
+        // --- Quiz Logic ---
+        function updateQuestionUI() {
+            const q = questions[currentState.currentQuestionIndex];
+            
+            els.qCurrent.innerText = currentState.currentQuestionIndex + 1;
+            els.qTotal.innerText = questions.length;
+            els.scoreDisplay.innerText = `${currentState.score * 10}`;
+            els.questionText.innerText = q.question;
+            
+            els.optionsContainer.innerHTML = '';
+            
+            q.options.forEach((opt, index) => {
+                const btn = document.createElement('button');
+                btn.className = `option-card w-full text-left p-5 border border-zinc-800 rounded-sm text-lg text-zinc-300 hover:text-white relative overflow-hidden flex items-center group`;
+                btn.innerHTML = `
+                    <span class="key-hint font-mono mr-4 opacity-50 group-hover:opacity-100">${index + 1}</span>
+                    <span class="relative z-10">${opt}</span>
+                `;
+                btn.onmouseenter = () => playSound('hover');
+                btn.onclick = () => handleAnswer(index, btn);
+                els.optionsContainer.appendChild(btn);
+            });
+
+            currentState.isAnswering = false;
+        }
+
+        function handleAnswer(selectedIndex, btnElement) {
+            if (currentState.isAnswering) return;
+            currentState.isAnswering = true;
+
+            const currentQ = questions[currentState.currentQuestionIndex];
+            const isCorrect = selectedIndex === currentQ.answer;
+
+            // Log History for Review
+            currentState.history.push({
+                question: currentQ.question,
+                selected: currentQ.options[selectedIndex],
+                correct: currentQ.options[currentQ.answer],
+                isCorrect: isCorrect
+            });
+
+            const buttons = els.optionsContainer.querySelectorAll('button');
+            buttons.forEach(b => {
+                b.classList.add('disabled', 'opacity-50', 'cursor-not-allowed');
+                b.disabled = true;
+            });
+
+            btnElement.classList.remove('opacity-50');
+            
+            if (isCorrect) {
+                playSound('success');
+                btnElement.classList.add('correct');
+                currentState.score++;
+            } else {
+                playSound('error');
+                btnElement.classList.add('wrong');
+                buttons[currentQ.answer].classList.add('correct', 'opacity-100');
+                buttons[currentQ.answer].classList.remove('opacity-50');
+            }
+
+            // Next Question
+            setTimeout(() => {
+                if (currentState.currentQuestionIndex < questions.length - 1) {
+                    currentState.currentQuestionIndex++;
+                    updateQuestionUI();
+                } else {
+                    finishQuiz();
+                }
+            }, 1200);
+        }
+
+        function finishQuiz() {
+            document.removeEventListener('keydown', handleKeyInput);
+            
+            const percentage = Math.round((currentState.score / questions.length) * 100);
+            
+            els.finalScore.innerText = `${percentage}%`;
+            
+            // Generate Review List if errors exist
+            const wrongAnswers = currentState.history.filter(h => !h.isCorrect);
+            if (wrongAnswers.length > 0) {
+                els.reviewSection.classList.remove('hidden');
+                els.reviewList.innerHTML = wrongAnswers.map(item => `
+                    <div class="review-item bg-red-900/10 p-4 rounded text-sm">
+                        <div class="text-zinc-400 mb-1">${item.question}</div>
+                        <div class="text-red-400 line-through text-xs mb-1">${item.selected}</div>
+                        <div class="text-green-400 font-bold">${item.correct}</div>
+                    </div>
+                `).join('');
+            } else {
+                els.reviewSection.classList.add('hidden');
+            }
+            
+            if (percentage === 100) {
+                els.resultMessage.innerText = "Perfect score. You are ready to build on the Modular Stack.";
+            } else if (percentage >= 80) {
+                els.resultMessage.innerText = "Excellent comprehension of the protocol architecture.";
+            } else if (percentage >= 50) {
+                els.resultMessage.innerText = "Solid foundation, but review the Sovereign Pool documentation.";
+            } else {
+                els.resultMessage.innerText = "Protocol knowledge insufficient. Re-read the docs and try again.";
+            }
+
+            fadeSwap(els.quizInterface, els.resultScreen);
+            playSound('success');
+        }
+
+        function resetApp() {
+            playSound('click');
+            els.usernameInput.value = '';
+            currentState.username = '';
+            els.reviewSection.classList.add('hidden');
+            fadeSwap(els.resultScreen, els.onboarding);
+        }
+
+        function shareResult() {
+            playSound('click');
+            const percentage = Math.round((currentState.score / questions.length) * 100);
+            const text = `I just scored ${percentage}% on the @ValantisLabs protocol research. \n\nThe modular future is here. Can you beat my score?\n\n#Valantis #DeFi #Modular`;
+            const url = "https://twitter.com/intent/tweet?text=" + encodeURIComponent(text);
+            window.open(url, '_blank');
+        }
+
+        // --- Input Handling ---
+        document.getElementById('username-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') startQuiz();
+        });
+    </script>
+</body>
+</html>
